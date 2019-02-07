@@ -395,8 +395,8 @@ class DB:
 
         if not os.path.exists(outDirectory):
             raise OSError('%s does not exist' % outDirectory)
-        if not os.path.exists(geosuiteCmd):
-            raise OSError('%s does not exist' % geosuiteCmd)
+        # if not os.path.exists(geosuiteCmd):
+        #     raise OSError('%s does not exist' % geosuiteCmd)
 
         tstart = time.time()
         models = modelsPyramid.models
@@ -421,6 +421,8 @@ class DB:
                     errorfile    = errorfile
                 ))
 
+        if not len(featuresArgs):
+            raise OSError('The are no files')
         cpuCount = multiprocessing.cpu_count()
         numFiles = len(featuresArgs)
         numProcs = cpuCount if numFiles >= cpuCount else numFiles
@@ -538,7 +540,7 @@ class DB:
     def populate(self):
         logger.info('Action: populate()')
         # Create missing tables in case new ones were added
-        self.setupDatabase()
+        # self.setupDatabase()
         self.populateTables()
 
     def destroy(self):

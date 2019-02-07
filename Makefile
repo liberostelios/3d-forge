@@ -10,7 +10,7 @@ USERNAME := $(shell whoami)
 TILEJSON_TEMPLATE ?= configs/raster/ch_swisstopo_swisstlm3d-wanderwege.cfg
 
 MAX_LINE_LENGTH=90
-PEP8_IGNORE="E128,E221,E241,E251,E272,E711,E731,W503"
+PEP8_IGNORE="E305,E128,E221,E241,E251,E272,E711,E731,W503"
 
 # E128: continuation line under-indented for visual indent
 # E221: multiple spaces before operator

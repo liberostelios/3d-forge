@@ -17,7 +17,7 @@ from forge.terrain.metadata import TerrainMetadata
 from forge.terrain.topology import TerrainTopology
 from forge.models.tables import modelsPyramid
 from forge.lib.tiles import TerrainTiles, QueueTerrainTiles
-from forge.lib.boto_conn import getBucket, writeToS3, getSQS, writeSQSMessage
+# from forge.lib.boto_conn import getBucket, writeToS3, getSQS, writeSQSMessage
 from forge.lib.helpers import gzipFileObject, timestamp, transformCoordinate, createBBox
 from forge.lib.global_geodetic import GlobalGeodetic
 from forge.lib.geometry_processors import processRingCoordinates
@@ -104,7 +104,7 @@ def createTile(tile):
 
         db = DB(dbConfigFile)
         with db.userSession() as session:
-            bucket = getBucket()
+            # bucket = getBucket()
 
             # Get the model according to the zoom level
             model = modelsPyramid.getModelByZoom(tileXYZ[2])
@@ -161,6 +161,10 @@ def createTile(tile):
 
             terrainTopo = TerrainTopology(hasLighting=hasLighting)
             for q in query:
+                if to_shape(q.clip).geom_type == "GeometryCollection":
+                    continue
+                if to_shape(q.clip).geom_type == "LineString" or to_shape(q.clip).geom_type == "Point":
+                    continue
                 coords = list(to_shape(q.clip).exterior.coords)
                 if q.id in cornerPts:
                     pt = cornerPts[q.id][0]
@@ -181,8 +185,11 @@ def createTile(tile):
                 for vertices in rings:
                     terrainTopo.addVertices(vertices)
 
-            bucketKey = '%s/%s/%s.terrain' % (
-                tileXYZ[2], tileXYZ[0], tileXYZ[1])
+            baseDir = '/Users/liberostelios/3d_forge_geodata/output'
+            terrainDir = '%s/%s/%s' % (baseDir,
+                tileXYZ[2], tileXYZ[0])
+            bucketKey = '%s/%s.terrain' % (
+                terrainDir, tileXYZ[1])
             verticesLength = len(terrainTopo.vertices)
             if verticesLength > 0:
                 terrainTopo.create()
@@ -190,13 +197,24 @@ def createTile(tile):
                 terrainFormat = TerrainTile(watermask=watermask)
                 terrainFormat.fromTerrainTopology(terrainTopo, bounds=bounds)
 
-                # Bytes manipulation and compression
-                fileObject = terrainFormat.toStringIO()
-                compressedFile = gzipFileObject(fileObject)
-                writeToS3(
-                    bucket, bucketKey, compressedFile, model.__tablename__,
-                    bucketBasePath, contentType=terrainFormat.getContentType()
+                # STELIOS: We want this in a file, instead
+                
+                if not os.path.isdir(terrainDir):
+                    os.makedirs(terrainDir)
+                terrainFormat.toFile(bucketKey)
+
+                logger.info('[%s] Just did %s %s' % (
+                        pid, bucketKey, bounds
+                    )
                 )
+
+                # Bytes manipulation and compression
+                # fileObject = terrainFormat.toStringIO()
+                # compressedFile = gzipFileObject(fileObject)
+                # writeToS3(
+                #     bucket, bucketKey, compressedFile, model.__tablename__,
+                #     bucketBasePath, contentType=terrainFormat.getContentType()
+                # )
                 tend = time.time()
                 tilecount.value += 1
                 val = tilecount.value
@@ -231,7 +249,7 @@ def createTile(tile):
 
 def scanTerrain(tMeta, tile, session, tilecount):
     try:
-        (bounds, tileXYZ, t0, dbConfigFile, hasLighting, hasWatermask) = tile
+        (bounds, tileXYZ, t0, dbConfigFile, bucketBasePath, hasLighting, hasWatermask) = tile
 
         # Get the model according to the zoom level
         model = modelsPyramid.getModelByZoom(tileXYZ[2])
@@ -421,13 +439,10 @@ class TilerManager:
 
     def metadata(self):
         t0 = time.time()
+        serverAddress = self.tmsConfig.get('General', 'serveraddress')
         basePath = self.tmsConfig.get('General', 'bucketpath')
         baseUrls = [
-            "//terrain0.geo.admin.ch/" + basePath + "{z}/{x}/{y}.terrain?v={version}",
-            "//terrain1.geo.admin.ch/" + basePath + "{z}/{x}/{y}.terrain?v={version}",
-            "//terrain2.geo.admin.ch/" + basePath + "{z}/{x}/{y}.terrain?v={version}",
-            "//terrain3.geo.admin.ch/" + basePath + "{z}/{x}/{y}.terrain?v={version}",
-            "//terrain4.geo.admin.ch/" + basePath + "{z}/{x}/{y}.terrain?v={version}"
+            serverAddress + basePath + "{z}/{x}/{y}.terrain?v={version}"
         ]
 
         db = DB('configs/terrain/database.cfg')
